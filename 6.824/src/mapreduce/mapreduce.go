@@ -91,6 +91,7 @@ func MakeMapReduce(nmap int, nreduce int,
 
 func (mr *MapReduce) Register(args *RegisterArgs, res *RegisterReply) error {
 	DPrintf("Register: worker %s\n", args.Worker)
+	//send worker to channel
 	mr.registerChannel <- args.Worker
 	res.OK = true
 	return nil

@@ -28,7 +28,26 @@ func (mr *MapReduce) KillWorkers() *list.List {
 	return l
 }
 
+func handle(worker string, file string) {
+	args := &DoJobArgs{}
+	args.File = file
+	args.Operation = Map
+	args.JobNumber = 1
+	args.NumOtherPhase = 1
+	var reply DoJobReply
+	ok := call(worker, "Worker.DoJob", args, &reply)
+	if ok == false {
+		fmt.Printf("Do map: RPC %s \n", worker)
+	}
+
+
+}
+
 func (mr *MapReduce) RunMaster() *list.List {
 	// Your code here
+	for {
+		newWorker := <- mr.registerChannel
+		go handle(newWorker, mr.file)
+	}
 	return mr.KillWorkers()
 }
