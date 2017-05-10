@@ -44,10 +44,49 @@ func handle(worker string, file string) {
 }
 
 func (mr *MapReduce) RunMaster() *list.List {
-	// Your code here
-	for {
-		newWorker := <- mr.registerChannel
-		go handle(newWorker, mr.file)
+	doneChannel := make(chan int)
+
+	for i:= 0; i< mr.nMap; i++ {
+		go func(jobnumber int) {
+			for {
+				worker := <-mr.idleWorkerChannel
+				args := &DoJobArgs{mr.file, Map, jobnumber, mr.nReduce}
+				reply := &DoJobReply{}
+				ok := call(worker, "Worker.DoJob", args, reply)
+				if ok == true {
+					mr.idleWorkerChannel <- worker
+					doneChannel <- jobnumber
+					return
+				}
+			}
+		}(i)
 	}
+
+	for i:=0; i< mr.nMap; i++ {
+		<- doneChannel
+	}
+
+	fmt.Printf("the reduce is %d \n", mr.nReduce)
+
+	for j:= 0; j < mr.nReduce; j++ {
+		go func(jobnumber int) {
+			for {
+				worker := <-mr.idleWorkerChannel
+				args := &DoJobArgs{mr.file, Reduce, jobnumber, mr.nMap}
+				reply := &DoJobReply{}
+				ok := call(worker, "Worker.DoJob", args, reply)
+				if ok == true {
+					mr.idleWorkerChannel <- worker
+					doneChannel <- jobnumber
+					return
+				}
+			}
+		}(j)
+	}
+
+	for j := 0; j < mr.nReduce; j++ {
+		<- doneChannel
+	}
+
 	return mr.KillWorkers()
 }
