@@ -16,7 +16,11 @@ type ViewServer struct {
 	rpccount int32 // for testing
 	me       string
 
-
+	client map[string]time.Time
+	view View
+	isAcked bool
+	primary string
+	backup string
 	// Your declarations here.
 }
 
@@ -26,8 +30,38 @@ type ViewServer struct {
 func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 
 	// Your code here.
+	clientName := args.Me
+	viewNum := args.Viewnum
 
+	if viewNum == 0 { //init or reboot
+		_, ok = client[clientName]
+		if ok {
+			//说明client reboot了．
+		} else {
+			client[clientName] = time.Now()
+		}
+	}
+
+	if !isAcked { //isAcked为false,那么直接返回旧的view,否在要新建立一个view
+		return view
+	} else {
+		view = new(View)
+	}
+
+
+	reply.view := view
 	return nil
+}
+
+//从client中构建新的view
+func (vs *ViewServer)createNewView() {
+	if primary == nil && backup == nil { //直接从client map中构建
+
+	} else if (primary == nil) { // backup替代primary,然后从map中挑选一个
+
+	} else if (backup == nil) {
+
+	}
 }
 
 //
@@ -77,7 +111,10 @@ func StartServer(me string) *ViewServer {
 	vs := new(ViewServer)
 	vs.me = me
 	// Your vs.* initializations here.
-
+	client = make(map[string]time.Time)
+	isAcked = false
+	primary = nil
+	backup = nil
 	// tell net/rpc about our RPC server and handlers.
 	rpcs := rpc.NewServer()
 	rpcs.Register(vs)
