@@ -1,0 +1,6 @@
+Test: First primary ...
+--- FAIL: Test1 (1.01s)
+	test_test.go:13: wanted primary /var/tmp/824-1000/viewserver-9477-1, got 
+FAIL
+exit status 1
+FAIL	_/home/homer/mit-distributed-systems/6.824/src/viewservice	1.015s
