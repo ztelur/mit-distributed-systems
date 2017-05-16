@@ -18,6 +18,7 @@ type ViewServer struct {
 
 	client map[string]time.Time
 	view View
+	preView View
 	isAcked bool
 	primary string
 	backup string
@@ -44,12 +45,13 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 	viewNum := args.Viewnum
 	log.Printf("new ping from %v, %d", clientName, viewNum)
 	//update isAcked
-
-	if clientName == primary {
-		isAcked = true
+	//每个view的primary都要acked,如果它的viewnum不匹配，那么就不算是acked
+	if clientName == primary && viewNum == vs.view.Viewnum {
+		log.Printf("isAcked from %v", clientName)
+		vs.isAcked = true
 	}
 
-	if viewNum == 0 { //init or reboot
+	if viewNum != vs.view.Viewnum { //init or reboot
 		_, ok := client[clientName]
 		if ok {
 			//说明client reboot了．
@@ -68,6 +70,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 			client[clientName] = time.Now()
 		}
 	} else {
+
 		_, ok := client[clientName]
 		if ok {
 			client[clientName] = time.Now()
@@ -123,7 +126,7 @@ func (vs *ViewServer)createNewView() {
 		vs.primary = vs.backup
 		vs.backup = backupCandidate
 	} else if (vs.backup == "") {
-		log.Printf("primary and backup is null")
+		log.Printf("backup is null")
 		candidateTime := time.Now()
 		backupCandidate := ""
 		for key, value := range vs.client {
@@ -135,25 +138,37 @@ func (vs *ViewServer)createNewView() {
 		vs.backup = backupCandidate
 	}
 	if vs.view.Primary != vs.primary || vs.view.Backup != vs.backup {
+		vs.preView = vs.view
 		vs.view = View{}
 		vs.view.Viewnum = vs.num
 		vs.num = vs.num + 1
 		vs.isAcked = false
 		vs.view.Primary = vs.primary
 		vs.view.Backup = vs.backup
+		log.Printf("change view");
 	}
+	log.Printf("the current view is %v %v %v ", vs.view.Viewnum, vs.primary, vs.backup)
 }
 
 //
 // server Get() RPC handler.
 //
 func (vs *ViewServer) Get(args *GetArgs, reply *GetReply) error {
-
+	vs.mu.Lock()
 	// Your code here.
-	reply.View = View{}
-	reply.View.Viewnum = vs.view.Viewnum
-	reply.View.Primary = vs.view.Primary
-	reply.View.Backup = vs.view.Backup
+	if true {
+		reply.View = View{}
+		reply.View.Viewnum = vs.view.Viewnum
+		reply.View.Primary = vs.view.Primary
+		reply.View.Backup = vs.view.Backup
+	} else {
+		reply.View = View{}
+		reply.View.Viewnum = vs.preView.Viewnum
+		reply.View.Primary = vs.preView.Primary
+		reply.View.Backup = vs.preView.Backup
+	}
+	vs.mu.Unlock()
+	log.Printf("the get view is %v,%v,%v", vs.view.Viewnum, vs.view.Primary, vs.view.Backup)
 	return nil
 }
 
@@ -167,27 +182,34 @@ func (vs *ViewServer) tick() {
 	//if primary reboot or crash, isAcked should be true
 	vs.mu.Lock()
 	log.Printf("tick")
+
+	nowTime := time.Now()
 	if vs.primary != "" {
 		log.Printf("the primary is " + vs.primary)
 		pingTime, _ := vs.client[vs.primary]
-		if pingTime.Before(vs.preTime) { //primary reboot or crash
-			log.Printf("the primary is crash" + vs.primary)
-			delete(vs.client, vs.primary)
-			vs.primary = ""
-
+		if nowTime.Sub(pingTime) > PingInterval * DeadPings { //primary reboot or crash
+			log.Printf("the primary is crash" + vs.primary + " the %v",nowTime.Sub(pingTime))
+			// 只有当view的acked,才会删除，否在一直等待
+			if vs.isAcked {
+				log.Printf("primary crash and remove it")
+				delete(vs.client, vs.primary)
+				vs.primary = ""
+			} else {
+				log.Printf("not acked so still watied")
+			}
 		}
 	}
 
 	if vs.backup != "" {
 		pingTime, _ := vs.client[vs.backup]
-		if pingTime.Before(vs.preTime) {
+		if nowTime.Sub(pingTime) > PingInterval * DeadPings {
 			delete(vs.client, vs.backup)
 			vs.backup = ""
 		}
 	}
 
 	for key, value := range vs.client {
-		if value.Before(vs.preTime) {
+		if nowTime.Sub(value) > PingInterval * DeadPings {
 				delete(vs.client, key)
 		}
 	}
