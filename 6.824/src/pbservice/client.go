@@ -11,6 +11,7 @@ import "math/big"
 type Clerk struct {
 	vs *viewservice.Clerk
 	// Your declarations here
+	primary string
 }
 
 // this may come in handy.
@@ -64,6 +65,7 @@ func call(srv string, rpcname string,
 	return false
 }
 
+
 //
 // fetch a key's value from the current primary;
 // if they key has never been set, return "".
@@ -72,18 +74,61 @@ func call(srv string, rpcname string,
 // says the key doesn't exist (has never been Put().
 //
 func (ck *Clerk) Get(key string) string {
+		// Your code here.
+		//先call缓存的primary,如果失败了,说明primary已经没有了，fetchNewViewService信息，然后再去call
+	for {
+		args := &GetArgs{key}
+		var reply GetReply
+		ret := ck.call(ck.Primary, "PBServer.Get", args, reply)
 
-	// Your code here.
+		if !ret {
+			continue
+		}
+
+		if reply.Err = ErrWrongServer {
+			ck.fetchNewServiceInfo()
+			continue
+		} else reply.Err = ErrNoKey {
+			return ""
+		} else {
+			return reply.Value
+		}
+	}
 
 	return "???"
+}
+
+
+func (ck *Clerk) fetchNewServiceInfo() {
+	view := vs.Get()
+	ck.primary = view.Primary
 }
 
 //
 // send a Put or Append RPC
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
-
 	// Your code here.
+	for {
+		args := &PutAppendArgs{key, value, op}
+		var reply PutAppendReply
+		ret := ck.call(ck.Primary, "PBServer.PutAppend", args, reply)
+
+		if !ret {
+			continue
+		}
+
+		if reply.Err = ErrWrongServer {
+			ck.fetchNewServiceInfo()
+			continue
+		} else reply.Err = ErrNoKey {
+			//append faile,put not will occur
+			return
+		} else {
+			//success
+			return
+		}
+	}
 }
 
 //

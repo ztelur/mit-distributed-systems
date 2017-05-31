@@ -57,6 +57,7 @@ func (vs *ViewServer) Ping(args *PingArgs, reply *PingReply) error {
 	} else {
 		_, exist := vs.client[me]
 		if exist {
+			//需要注意的是，只有当view的num相同时，才能认为是ack
 			if me == vs.view.Primary && viewnum == vs.view.Viewnum {
 				log.Printf("isAcked from %v", me)
 				vs.isAcked = true

@@ -22,12 +22,32 @@ type PBServer struct {
 	me         string
 	vs         *viewservice.Clerk
 	// Your declarations here.
+	data map[string]string
+	view viewservice.View
 }
 
 
 func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 
 	// Your code here.
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
+	reply = &GetReply()
+	//先check一下自己是不是primary
+	if pb.view.Primary != me {
+		reply.Err = ErrWrongServer
+		return nil
+	}
+
+	key := args.Key
+	value, exist := pb.data[key]
+
+	if exist {
+		reply.Value = value
+	} else {
+		reply.Err = ErrNoKey
+	}
 
 	return nil
 }
@@ -36,8 +56,29 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 
 	// Your code here.
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
 
+	reply = &PutAppendReply()
+	//先check一下自己是不是primary
+	if pb.view.Primary != me {
+		reply.Err = ErrWrongServer
+		return nil
+	}
 
+	key := args.Key
+	value := args.Value
+	action := args.Type
+	if action == "Put" {
+		pb.data[key] = value
+	} else if action == "Append" {
+		val, exist := pb.data[key]
+		if exist {
+			pb.data[key] = val + value
+		} else {
+			pb.data[key] = value
+		}
+	}
 	return nil
 }
 
@@ -49,8 +90,10 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 //   manage transfer of state from primary to new backup.
 //
 func (pb *PBServer) tick() {
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+	pb.view, _ = pb.vs.Ping(pb.view.Viewnum)
 
-	// Your code here.
 }
 
 // tell the server to shut itself down.
@@ -84,6 +127,11 @@ func StartServer(vshost string, me string) *PBServer {
 	pb.me = me
 	pb.vs = viewservice.MakeClerk(me, vshost)
 	// Your pb.* initializations here.
+	pb.view = viewservice.View{}
+	pb.view.Viewnum = 0
+	pb.view.Primary = ""
+	pb.view.Backup = ""
+	pb.data = make(map[string]string)
 
 	rpcs := rpc.NewServer()
 	rpcs.Register(pb)

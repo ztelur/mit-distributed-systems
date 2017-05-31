@@ -38,7 +38,8 @@ func TestBasicFail(t *testing.T) {
 
 	tag := "basic"
 	vshost := port(tag+"v", 1)
-	vs := viewservice.StartServer(vshost)
+	//vshost 是viewservice的port
+	vs := viewservice.StartServer(vshost) //viewservice
 	time.Sleep(time.Second)
 	vck := viewservice.MakeClerk("", vshost)
 
