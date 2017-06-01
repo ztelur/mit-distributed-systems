@@ -1135,7 +1135,7 @@ func TestPartition2(t *testing.T) {
 
 	check(ck2, "a", "2")
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf(" All ... Passed\n")
 
 	s1.kill()
 	s2.kill()

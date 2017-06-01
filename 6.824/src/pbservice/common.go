@@ -34,5 +34,22 @@ type GetReply struct {
 	Value string
 }
 
+type CopyArgs struct {
+	Data map[string]string
+}
+
+type CopyReply struct {
+	Err Err
+}
+
+type ForwardArgs struct {
+	Key string
+	Value string
+	Type string
+}
+
+type ForwardReply struct {
+	Err Err
+}
 
 // Your RPC definitions here.

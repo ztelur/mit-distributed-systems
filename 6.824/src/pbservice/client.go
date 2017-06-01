@@ -3,7 +3,7 @@ package pbservice
 import "viewservice"
 import "net/rpc"
 import "fmt"
-
+import "time"
 import "crypto/rand"
 import "math/big"
 
@@ -12,6 +12,7 @@ type Clerk struct {
 	vs *viewservice.Clerk
 	// Your declarations here
 	primary string
+	me string
 }
 
 // this may come in handy.
@@ -26,7 +27,7 @@ func MakeClerk(vshost string, me string) *Clerk {
 	ck := new(Clerk)
 	ck.vs = viewservice.MakeClerk(me, vshost)
 	// Your ck.* initializations here
-
+	ck.me = me
 	return ck
 }
 
@@ -74,25 +75,31 @@ func call(srv string, rpcname string,
 // says the key doesn't exist (has never been Put().
 //
 func (ck *Clerk) Get(key string) string {
+		fmt.Printf("Get %v \n", key)
 		// Your code here.
 		//先call缓存的primary,如果失败了,说明primary已经没有了，fetchNewViewService信息，然后再去call
 	for {
-		args := &GetArgs{key}
+		args := &GetArgs{key, ck.me}
 		var reply GetReply
-		ret := ck.call(ck.Primary, "PBServer.Get", args, reply)
+		ret := call(ck.primary, "PBServer.Get", args, &reply)
 
 		if !ret {
-			continue
-		}
-
-		if reply.Err = ErrWrongServer {
+			// continue
 			ck.fetchNewServiceInfo()
 			continue
-		} else reply.Err = ErrNoKey {
+		}
+		fmt.Printf("Client: Get %v %v \n", key, reply.Err)
+		if reply.Err == ErrWrongServer {
+			fmt.Printf("Client: wrong server\n")
+			ck.fetchNewServiceInfo()
+			continue
+		} else if reply.Err == ErrNoKey {
 			return ""
 		} else {
+			fmt.Printf("Client: Get %v %v %v \n", key, reply.Value)
 			return reply.Value
 		}
+		time.Sleep(viewservice.PingInterval)
 	}
 
 	return "???"
@@ -100,8 +107,12 @@ func (ck *Clerk) Get(key string) string {
 
 
 func (ck *Clerk) fetchNewServiceInfo() {
-	view := vs.Get()
-	ck.primary = view.Primary
+	view, ok := ck.vs.Get()
+	if ok {
+		ck.primary = view.Primary
+	} else {
+		ck.primary = ""
+	}
 }
 
 //
@@ -109,25 +120,31 @@ func (ck *Clerk) fetchNewServiceInfo() {
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 	// Your code here.
+	fmt.Printf("put %v %v %v cureent primary is %v \n", key, value, op, ck.primary)
 	for {
-		args := &PutAppendArgs{key, value, op}
+		args := &PutAppendArgs{key, value, op, ck.me}
 		var reply PutAppendReply
-		ret := ck.call(ck.Primary, "PBServer.PutAppend", args, reply)
+		ret := call(ck.primary, "PBServer.PutAppend", args, &reply)
+
 
 		if !ret {
+			// continue
+			ck.fetchNewServiceInfo()
+			fmt.Printf("fetch new service primary is %v \n", ck.primary)
 			continue
 		}
 
-		if reply.Err = ErrWrongServer {
+		if reply.Err == ErrWrongServer {
 			ck.fetchNewServiceInfo()
 			continue
-		} else reply.Err = ErrNoKey {
+		} else if reply.Err == ErrNoKey {
 			//append faile,put not will occur
 			return
 		} else {
 			//success
 			return
 		}
+		time.Sleep(viewservice.PingInterval)
 	}
 }
 

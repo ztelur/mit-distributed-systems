@@ -24,6 +24,7 @@ type PBServer struct {
 	// Your declarations here.
 	data map[string]string
 	view viewservice.View
+
 }
 
 
@@ -33,21 +34,24 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	reply = &GetReply()
 	//先check一下自己是不是primary
-	if pb.view.Primary != me {
+	if pb.view.Primary != pb.me {
 		reply.Err = ErrWrongServer
 		return nil
 	}
 
 	key := args.Key
 	value, exist := pb.data[key]
-
 	if exist {
+		fmt.Printf("Server:Get the key is %v the value is %v \n", key, value)
 		reply.Value = value
+		reply.Err = OK
 	} else {
 		reply.Err = ErrNoKey
 	}
+
+	//通知Backup
+
 
 	return nil
 }
@@ -59,9 +63,8 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	reply = &PutAppendReply()
 	//先check一下自己是不是primary
-	if pb.view.Primary != me {
+	if pb.view.Primary != pb.me {
 		reply.Err = ErrWrongServer
 		return nil
 	}
@@ -69,6 +72,8 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 	key := args.Key
 	value := args.Value
 	action := args.Type
+
+	fmt.Printf("Server:Put %v %v %v \n", key, value, action)
 	if action == "Put" {
 		pb.data[key] = value
 	} else if action == "Append" {
@@ -79,9 +84,76 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 			pb.data[key] = value
 		}
 	}
+
+	if pb.view.Backup != "" {
+		forwardArgs := &ForwardArgs{key, value, action}
+		var forwardReply ForwardReply
+		for {
+			ok := call(pb.view.Backup, "PBServer.Forward", forwardArgs, &forwardReply)
+			fmt.Printf("the forward to %v and reply is %v", pb.view.Backup, forwardReply.Err)
+			if ok {
+				if forwardReply.Err == OK {
+					break
+				}
+			} else {
+				break;
+			}
+			time.Sleep(viewservice.PingInterval)
+		}
+	}
+
 	return nil
 }
 
+
+
+func (pb *PBServer) Forward(args *ForwardArgs, reply *ForwardReply) error {
+
+	// Your code here.
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+	//先看一下自己是不是backup
+	if pb.view.Backup != pb.me {
+		reply.Err = ErrWrongServer
+		return nil
+	}
+
+	key := args.Key
+	value := args.Value
+	action := args.Type
+
+	fmt.Printf("Server:Forward %v %v %v \n", key, value, action)
+	if action == "Put" {
+		pb.data[key] = value
+	} else if action == "Append" {
+		val, exist := pb.data[key]
+		if exist {
+			pb.data[key] = val + value
+		} else {
+			pb.data[key] = value
+		}
+	}
+
+	reply.Err = OK
+
+	return nil
+}
+
+func (pb *PBServer) CopyData(args *CopyArgs, reply *CopyReply) error {
+
+	// Your code here.
+	pb.mu.Lock()
+	defer pb.mu.Unlock()
+
+	if pb.view.Backup != pb.me {
+		reply.Err = ErrWrongServer
+		return nil
+	}
+
+	pb.data = args.Data
+	reply.Err = OK
+	return nil
+}
 
 //
 // ping the viewserver periodically.
@@ -92,8 +164,24 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 func (pb *PBServer) tick() {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
-	pb.view, _ = pb.vs.Ping(pb.view.Viewnum)
-
+	view, _ := pb.vs.Ping(pb.view.Viewnum)
+	if pb.view.Viewnum != view.Viewnum {
+		if pb.view.Primary == pb.me && view.Backup != "" {
+			//传输data
+			args := &CopyArgs{pb.data}
+			var reply CopyReply
+			for {
+				call(view.Backup, "PBServer.CopyData", args, &reply)
+				if reply.Err == OK {
+					break
+				}
+				time.Sleep(viewservice.PingInterval)
+			}
+		}
+	}
+	pb.view.Primary = view.Primary
+	pb.view.Backup = view.Backup
+	pb.view.Viewnum = view.Viewnum
 }
 
 // tell the server to shut itself down.
