@@ -55,6 +55,9 @@ type Paxos struct {
 
 
 	// Your data here.
+	max_prepared_id int
+	max_accepted_id int
+	accepted_value interface{}
 }
 
 //
@@ -102,7 +105,35 @@ func call(srv string, name string, args interface{}, reply interface{}) bool {
 // is reached.
 //
 func (px *Paxos) Start(seq int, v interface{}) {
-	// Your code here.
+	// Your code here.在这里会调用proposer()函数
+}
+
+func (px *Paxos) Propose(seq int, v interface{}) {
+	for {
+		//send prepared(n) to all servers including self ,but self call function directly not by rpc
+		len := len(px.peers)
+		var preparedData [len]PrepareReply
+		for i, srv in range px.peers {
+			var reply PrepareReply
+			if srv == px.me {
+				px.Prepare(seq, &reply)
+			} else {
+				var reply PrepareReply
+				ok : = call(srv, "Paxos.Prepare", seq, &reply)
+			}
+			preparedData[i] = reply
+		}
+
+		//handle the preparedData to figure the agreee data 
+	}
+}
+
+func (px *Paxos) Prepare(seq int, reply *PrepareReply) {
+
+}
+
+func (px *Paxos) Accept(seq int, v interface{}) {
+
 }
 
 //
