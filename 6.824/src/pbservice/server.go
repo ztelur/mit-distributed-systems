@@ -35,7 +35,7 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 	defer pb.mu.Unlock()
 
 	//先check一下自己是不是primary
-	if pb.view.Primary != pb.me {
+	if pb.isPrimary() {
 		reply.Err = ErrWrongServer
 		return nil
 	}
@@ -50,10 +50,11 @@ func (pb *PBServer) Get(args *GetArgs, reply *GetReply) error {
 		reply.Err = ErrNoKey
 	}
 
-	//通知Backup
-
-
 	return nil
+}
+
+func (pb *PBServer) isPrimary() bool {
+	return pb.view.Primary != pb.me
 }
 
 
@@ -64,7 +65,7 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 	defer pb.mu.Unlock()
 
 	//先check一下自己是不是primary
-	if pb.view.Primary != pb.me {
+	if pb.isPrimary() {
 		reply.Err = ErrWrongServer
 		return nil
 	}
@@ -73,20 +74,15 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 	value := args.Value
 	action := args.Type
 
-	fmt.Printf("Server:Put %v %v %v \n", key, value, action)
-	if action == "Put" {
-		pb.data[key] = value
-	} else if action == "Append" {
-		val, exist := pb.data[key]
-		if exist {
-			pb.data[key] = val + value
-		} else {
-			pb.data[key] = value
-		}
-	}
+	pb.addData(key, value, action)
+	pb.notifyBackupIfNeed(key, value, action)
 
+	return nil
+}
+
+func (pb *PBServer) notifyBackupIfNeed(key string, val string, action string) {
 	if pb.view.Backup != "" {
-		forwardArgs := &ForwardArgs{key, value, action}
+		forwardArgs := &ForwardArgs{key, val, action}
 		var forwardReply ForwardReply
 		for {
 			ok := call(pb.view.Backup, "PBServer.Forward", forwardArgs, &forwardReply)
@@ -101,11 +97,21 @@ func (pb *PBServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error 
 			time.Sleep(viewservice.PingInterval)
 		}
 	}
-
-	return nil
 }
 
-
+func (pb *PBServer) addData(key string, value string, action string) {
+	fmt.Printf("Server:Put %v %v %v \n", key, value, action)
+	if action == "Put" {
+		pb.data[key] = value
+	} else if action == "Append" {
+		origin, exist := pb.data[key]
+		if exist {
+			pb.data[key] = origin + value
+		} else {
+			pb.data[key] = value
+		}
+	}
+}
 
 func (pb *PBServer) Forward(args *ForwardArgs, reply *ForwardReply) error {
 
@@ -113,7 +119,7 @@ func (pb *PBServer) Forward(args *ForwardArgs, reply *ForwardReply) error {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 	//先看一下自己是不是backup
-	if pb.view.Backup != pb.me {
+	if pb.isBackup() {
 		reply.Err = ErrWrongServer
 		return nil
 	}
@@ -122,21 +128,15 @@ func (pb *PBServer) Forward(args *ForwardArgs, reply *ForwardReply) error {
 	value := args.Value
 	action := args.Type
 
-	fmt.Printf("Server:Forward %v %v %v \n", key, value, action)
-	if action == "Put" {
-		pb.data[key] = value
-	} else if action == "Append" {
-		val, exist := pb.data[key]
-		if exist {
-			pb.data[key] = val + value
-		} else {
-			pb.data[key] = value
-		}
-	}
+	pb.addData(key, value, action)
 
 	reply.Err = OK
 
 	return nil
+}
+
+func (pb *PBServer) isBackup() bool {
+	return pb.view.Backup != pb.me
 }
 
 func (pb *PBServer) CopyData(args *CopyArgs, reply *CopyReply) error {
@@ -145,7 +145,7 @@ func (pb *PBServer) CopyData(args *CopyArgs, reply *CopyReply) error {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	if pb.view.Backup != pb.me {
+	if pb.isBackup() {
 		reply.Err = ErrWrongServer
 		return nil
 	}
@@ -164,24 +164,31 @@ func (pb *PBServer) CopyData(args *CopyArgs, reply *CopyReply) error {
 func (pb *PBServer) tick() {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
-	view, _ := pb.vs.Ping(pb.view.Viewnum)
-	if pb.view.Viewnum != view.Viewnum {
-		if pb.view.Primary == pb.me && view.Backup != "" {
+
+	newView, _ := pb.vs.Ping(pb.view.Viewnum)
+
+	if pb.view.Viewnum != newView.Viewnum {
+		if pb.view.Primary == pb.me && newView.Backup != "" {
 			//传输data
-			args := &CopyArgs{pb.data}
-			var reply CopyReply
-			for {
-				call(view.Backup, "PBServer.CopyData", args, &reply)
-				if reply.Err == OK {
-					break
-				}
-				time.Sleep(viewservice.PingInterval)
-			}
+			pb.transferToBackup(newView.Backup)
 		}
 	}
-	pb.view.Primary = view.Primary
-	pb.view.Backup = view.Backup
-	pb.view.Viewnum = view.Viewnum
+
+	pb.view.Primary = newView.Primary
+	pb.view.Backup = newView.Backup
+	pb.view.Viewnum = newView.Viewnum
+}
+
+func (pb *PBServer) transferToBackup(backup string) {
+	args := &CopyArgs{pb.data}
+	var reply CopyReply
+	for {
+		call(backup, "PBServer.CopyData", args, &reply)
+		if reply.Err == OK {
+			break
+		}
+		time.Sleep(viewservice.PingInterval)
+	}
 }
 
 // tell the server to shut itself down.
