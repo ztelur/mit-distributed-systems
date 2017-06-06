@@ -97,6 +97,7 @@ func call(srv string, name string, args interface{}, reply interface{}) bool {
 }
 
 
+
 //
 // the application wants paxos to start agreement on
 // instance seq, with proposed value v.
@@ -106,6 +107,7 @@ func call(srv string, name string, args interface{}, reply interface{}) bool {
 //
 func (px *Paxos) Start(seq int, v interface{}) {
 	// Your code here.在这里会调用proposer()函数
+	go px.Propose(seq, v)
 }
 
 func (px *Paxos) Propose(seq int, v interface{}) {
@@ -113,27 +115,117 @@ func (px *Paxos) Propose(seq int, v interface{}) {
 		//send prepared(n) to all servers including self ,but self call function directly not by rpc
 		len := len(px.peers)
 		var preparedData [len]PrepareReply
-		for i, srv in range px.peers {
+		for i, srv := range px.peers {
 			var reply PrepareReply
+			args := &PrepareArgs{seq}
 			if srv == px.me {
-				px.Prepare(seq, &reply)
+				px.Prepare(args, &reply)
 			} else {
-				var reply PrepareReply
-				ok : = call(srv, "Paxos.Prepare", seq, &reply)
+				ok : = call(srv, "Paxos.Prepare", args, &reply)
+				if ok == false {
+					reply.Status = REJECT
+				}
 			}
 			preparedData[i] = reply
 		}
 
-		//handle the preparedData to figure the agreee data 
+		//handle the preparedData to figure the agreee data
+		decided := px.handlePrepareData(preparedData, v, seq)
+		if decided {
+			break
+		}
 	}
 }
 
-func (px *Paxos) Prepare(seq int, reply *PrepareReply) {
+//注意，只有过了半数才可以
+func (px *Paxos) handlePrepareData(data []PrepareReply, v interface{}, seq int) bool {
+	count := 0
+	max_p := -1
+	var val interface{}
+	for i, reply := range data {
+		if reply.Status == OK {
+			count += 1
+			if reply.Accepted_seq > max_p { //-1 是未初始化
+				val = reply.Accepted_value
+				max_p = reply.Accepted_seq
+			}
+		}
+	}
+	major = len(data) / 2
+	if count > major { //> major 并且max_p不为-1,也就是不为默认值
+		if max_p > -1 {
 
+		} else {
+			val = v
+		}
+
+		return px.sendAccept(seq, val)
+
+	} else {
+		return false
+	}
 }
 
-func (px *Paxos) Accept(seq int, v interface{}) {
+func (px *Paxos) sendAccept(seq int, val interface{}) bool {
+	len := len(px.peers)
+	var acceptReplyArray [len]AcceptReply
+	for i, srv := range px.peers {
+		var reply AcceptReply
+		args := &AcceptArgs{seq, val}
+		if srv == px.me {
+			px.Accept(args, &reply)
+		} else {
+			ok : = call(srv, "Paxos.Accept", seq, &reply)
+			if not ok {
+				reply.Status = REJECT
+			}
+		}
+		acceptReplyArray[i] = reply
+	}
 
+	count := 0
+	major := len(px.peers) / 2
+	for _, reply in range acceptReplyArray {
+		if reply.Status == OK {
+			count += 1
+		}
+	}
+
+	if count > major {
+		//decided
+		return true
+	} else {
+		return false
+	}
+}
+
+func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) {
+		px.mu.Lock()
+		defer px.mu.Unlock()
+		if seq > px.getPreparedId() {
+				reply.Status = OK
+				reply.Accepted_seq = px.max_accepted_id
+				reply.Accepted_value = px.accepted_value
+		} else {
+				reply.Status = REJECT
+		}
+		return nil
+}
+
+func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) {
+		px.mu.Lock()
+		defer px.mu.Unlock()
+		seq := args.Seq
+		val := args.Value
+		if seq >= px.max_prepared_id {
+			px.max_prepared_id = seq
+			px.max_accepted_id = seq
+			px.accepted_value = val
+			reply.Status = OK
+		} else {
+			reply.Status = REJECT
+		}
+		return nil
 }
 
 //
