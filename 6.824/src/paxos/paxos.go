@@ -111,17 +111,17 @@ func (px *Paxos) Start(seq int, v interface{}) {
 }
 
 func (px *Paxos) Propose(seq int, v interface{}) {
-	for {
+	// for {
 		//send prepared(n) to all servers including self ,but self call function directly not by rpc
-		len := len(px.peers)
-		var preparedData [len]PrepareReply
+		size := len(px.peers)
+		var preparedData = make([]PrepareReply,size)
 		for i, srv := range px.peers {
 			var reply PrepareReply
 			args := &PrepareArgs{seq}
-			if srv == px.me {
+			if srv == px.peers[px.me] {
 				px.Prepare(args, &reply)
 			} else {
-				ok : = call(srv, "Paxos.Prepare", args, &reply)
+				ok := call(srv, "Paxos.Prepare", args, &reply)
 				if ok == false {
 					reply.Status = REJECT
 				}
@@ -132,9 +132,9 @@ func (px *Paxos) Propose(seq int, v interface{}) {
 		//handle the preparedData to figure the agreee data
 		decided := px.handlePrepareData(preparedData, v, seq)
 		if decided {
-			break
+			// break
 		}
-	}
+	// }
 }
 
 //注意，只有过了半数才可以
@@ -142,7 +142,7 @@ func (px *Paxos) handlePrepareData(data []PrepareReply, v interface{}, seq int) 
 	count := 0
 	max_p := -1
 	var val interface{}
-	for i, reply := range data {
+	for _, reply := range data {
 		if reply.Status == OK {
 			count += 1
 			if reply.Accepted_seq > max_p { //-1 是未初始化
@@ -151,7 +151,7 @@ func (px *Paxos) handlePrepareData(data []PrepareReply, v interface{}, seq int) 
 			}
 		}
 	}
-	major = len(data) / 2
+	major := len(data) / 2
 	if count > major { //> major 并且max_p不为-1,也就是不为默认值
 		if max_p > -1 {
 
@@ -167,16 +167,16 @@ func (px *Paxos) handlePrepareData(data []PrepareReply, v interface{}, seq int) 
 }
 
 func (px *Paxos) sendAccept(seq int, val interface{}) bool {
-	len := len(px.peers)
-	var acceptReplyArray [len]AcceptReply
+	size := len(px.peers)
+	var acceptReplyArray = make([]AcceptReply,size)
 	for i, srv := range px.peers {
 		var reply AcceptReply
 		args := &AcceptArgs{seq, val}
-		if srv == px.me {
+		if srv == px.peers[px.me] {
 			px.Accept(args, &reply)
 		} else {
-			ok : = call(srv, "Paxos.Accept", seq, &reply)
-			if not ok {
+			ok := call(srv, "Paxos.Accept", seq, &reply)
+			if !ok {
 				reply.Status = REJECT
 			}
 		}
@@ -185,7 +185,7 @@ func (px *Paxos) sendAccept(seq int, val interface{}) bool {
 
 	count := 0
 	major := len(px.peers) / 2
-	for _, reply in range acceptReplyArray {
+	for _, reply := range acceptReplyArray {
 		if reply.Status == OK {
 			count += 1
 		}
@@ -199,10 +199,11 @@ func (px *Paxos) sendAccept(seq int, val interface{}) bool {
 	}
 }
 
-func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) {
+func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error{
 		px.mu.Lock()
 		defer px.mu.Unlock()
-		if seq > px.getPreparedId() {
+		seq := args.Seq
+		if seq > px.max_prepared_id {
 				reply.Status = OK
 				reply.Accepted_seq = px.max_accepted_id
 				reply.Accepted_value = px.accepted_value
@@ -212,7 +213,7 @@ func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) {
 		return nil
 }
 
-func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) {
+func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error{
 		px.mu.Lock()
 		defer px.mu.Unlock()
 		seq := args.Seq
@@ -337,7 +338,6 @@ func Make(peers []string, me int, rpcs *rpc.Server) *Paxos {
 	px.peers = peers
 	px.me = me
 
-
 	// Your initialization code here.
 
 	if rpcs != nil {
@@ -351,6 +351,7 @@ func Make(peers []string, me int, rpcs *rpc.Server) *Paxos {
 		// change "unix" to "tcp" to use over a network.
 		os.Remove(peers[me]) // only needed for "unix"
 		l, e := net.Listen("unix", peers[me])
+		fmt.Printf("make a server %v \n", peers[me])
 		if e != nil {
 			log.Fatal("listen error: ", e)
 		}
