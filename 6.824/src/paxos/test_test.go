@@ -131,7 +131,7 @@ func TestBasic(t *testing.T) {
 	pxa[0].Start(0, "hello")
 	waitn(t, pxa, 0, npaxos)
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 1Passed\n")
 
 	fmt.Printf("Test: Many proposers, same value ...\n")
 
@@ -140,7 +140,7 @@ func TestBasic(t *testing.T) {
 	}
 	waitn(t, pxa, 1, npaxos)
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 2Passed\n")
 
 	fmt.Printf("Test: Many proposers, different values ...\n")
 
@@ -149,7 +149,7 @@ func TestBasic(t *testing.T) {
 	pxa[2].Start(2, 102)
 	waitn(t, pxa, 2, npaxos)
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 3Passed\n")
 
 	fmt.Printf("Test: Out-of-order instances ...\n")
 
@@ -168,7 +168,7 @@ func TestBasic(t *testing.T) {
 		t.Fatalf("wrong Max()")
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 4Passed\n")
 }
 
 func TestDeaf(t *testing.T) {
@@ -211,7 +211,7 @@ func TestDeaf(t *testing.T) {
 	pxa[npaxos-1].Start(1, "yyy")
 	waitn(t, pxa, 1, npaxos)
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 5Passed\n")
 }
 
 func TestForget(t *testing.T) {
@@ -293,7 +293,7 @@ func TestForget(t *testing.T) {
 		t.Fatalf("Min() did not advance after Done()")
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 6Passed\n")
 }
 
 func TestManyForget(t *testing.T) {
@@ -362,7 +362,7 @@ func TestManyForget(t *testing.T) {
 		}
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 7Passed\n")
 }
 
 //
@@ -450,7 +450,7 @@ func TestForgetMem(t *testing.T) {
 		}
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 8Passed\n")
 }
 
 //
@@ -497,7 +497,7 @@ func TestDoneMax(t *testing.T) {
 		}
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 9Passed\n")
 }
 
 func TestRPCCount(t *testing.T) {
@@ -569,7 +569,7 @@ func TestRPCCount(t *testing.T) {
 			ninst2, total2, expected2)
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 10Passed\n")
 }
 
 //
@@ -618,7 +618,7 @@ func TestMany(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 11Passed\n")
 }
 
 //
@@ -656,7 +656,7 @@ func TestOld(t *testing.T) {
 		waitn(t, pxa, 1, npaxos)
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 12Passed\n")
 }
 
 //
@@ -706,7 +706,7 @@ func TestManyUnreliable(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 13Passed\n")
 }
 
 func pp(tag string, src int, dst int) string {
@@ -780,7 +780,7 @@ func TestPartition(t *testing.T) {
 	pxa[1].Start(seq, 111)
 	checkmax(t, pxa, seq, 0)
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 14Passed\n")
 
 	fmt.Printf("Test: Decision in majority partition ...\n")
 
@@ -788,7 +788,7 @@ func TestPartition(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	waitmajority(t, pxa, seq)
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 15Passed\n")
 
 	fmt.Printf("Test: All agree after full heal ...\n")
 
@@ -798,7 +798,7 @@ func TestPartition(t *testing.T) {
 
 	waitn(t, pxa, seq, npaxos)
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 16Passed\n")
 
 	fmt.Printf("Test: One peer switches partitions ...\n")
 
@@ -817,7 +817,7 @@ func TestPartition(t *testing.T) {
 		waitn(t, pxa, seq, npaxos)
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 17Passed\n")
 
 	fmt.Printf("Test: One peer switches partitions, unreliable ...\n")
 
@@ -846,7 +846,7 @@ func TestPartition(t *testing.T) {
 		waitn(t, pxa, seq, 5)
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 18Passed\n")
 }
 
 func TestLots(t *testing.T) {
@@ -953,5 +953,5 @@ func TestLots(t *testing.T) {
 		waitmajority(t, pxa, i)
 	}
 
-	fmt.Printf("  ... Passed\n")
+	fmt.Printf("  ... 19Passed\n")
 }

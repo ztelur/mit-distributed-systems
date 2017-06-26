@@ -10,22 +10,36 @@ type Status string
 
 
 // Put or Append
+
 type PrepareArgs struct {
-  Seq int
+	Seq int
+	Num int64
 }
 
 type PrepareReply struct {
-	Status Status // ok , reject
-  Accepted_seq int
-  Accepted_value interface{}
+	Err string
+	Num int64
+	Value interface{}
 }
 
 type AcceptArgs struct {
-  Seq int
+	Seq int
+	Num int64
 	Value interface{}
 }
 
 type AcceptReply struct {
-	Status Status // ok , reject
-  Accepted_seq int
+	Err string
+}
+
+type DecidedArgs struct {
+	Seq int
+	Num int64
+	Value interface{}
+	Me int
+	Done int
+}
+
+type DecidedReply struct {
+
 }
