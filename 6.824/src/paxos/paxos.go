@@ -176,7 +176,7 @@ func (px *Paxos) sendPrepare(seq int, v interface{}, num int64) (bool, interface
 	acceptCount := 0
 	var acceptNum int64 = 0
 	acceptValue := v
-
+	//对所有的peer发送prepare请求
 	for i, peer := range px.peers {
 		reply := &PrepareReply{}
 		reply.Num = 0
@@ -190,14 +190,14 @@ func (px *Paxos) sendPrepare(seq int, v interface{}, num int64) (bool, interface
 
 		if reply.Err == OK {
 			acceptCount += 1
-			if reply.Num > acceptNum {
+			if reply.Num > acceptNum { //寻找acceptNum最大的那个value和seq
 				acceptNum = reply.Num
 				acceptValue = reply.Value
 			}
 		}
 	}
 
-	if acceptCount >= len(px.peers) / 2 + 1 {
+	if acceptCount >= len(px.peers) / 2 + 1 { //如果超过半数的话，就成功
 		return true, acceptValue
 	}
 
@@ -220,7 +220,7 @@ func (px *Paxos) rejectAccept(reply *AcceptReply) {
 func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) {
 	px.mu.Lock()
 	defer px.mu.Unlock()
-
+	//所有的accept和repare的模式都是如此，先看有没有，如果没有直接处理，否者查看一下num
 	_, ok := px.instances[args.Seq]
 	if !ok {
 		px.instances[args.Seq] = px.makeInstanceInfo()
@@ -258,7 +258,7 @@ func (px *Paxos) sendAccept(seq int, v interface{}, num int64) bool {
 		}
 	}
 
-	if acceptCount >= len(px.peers) / 2 + 1 {
+	if acceptCount >= len(px.peers) / 2 + 1 { //超过半数的accept那么就是成功了
 		return true
 	}
 
@@ -323,137 +323,6 @@ func (px *Paxos) proposer(seq int, v interface{}) {
 }
 
 
-
-
-
-// func (px *Paxos) Propose(seq int, v interface{}) {
-// 	fmt.Printf("Propose: server %v seq %v v %v \n", px.peers[px.me], seq, v)
-// 	// for {
-// 		//send prepared(n) to all servers including self ,but self call function directly not by rpc
-// 		size := len(px.peers)
-// 		var preparedData = make([]PrepareReply,size)
-// 		for i, srv := range px.peers {
-// 			var reply PrepareReply
-// 			args := &PrepareArgs{seq}
-// 			if srv == px.peers[px.me] {
-// 				px.Prepare(args, &reply)
-// 			} else {
-// 				ok := call(srv, "Paxos.Prepare", args, &reply)
-// 				if ok == false {
-// 					reply.Status = REJECT
-// 				}
-// 			}
-// 			preparedData[i] = reply
-// 		}
-//
-// 		//handle the preparedData to figure the agreee data
-// 		decided := px.handlePrepareData(preparedData, v, seq)
-// 		if decided {
-// 			// break
-// 		}
-// 	// }
-// }
-//
-// //注意，只有过了半数才可以
-// func (px *Paxos) handlePrepareData(data []PrepareReply, v interface{}, seq int) bool {
-// 	count := 0
-// 	max_p := -1
-// 	var val interface{}
-// 	for _, reply := range data {
-// 		fmt.Printf("handlePrepareData %v %v \n", reply.Status, reply.Accepted_seq)
-// 		if reply.Status == OK {
-// 			count += 1
-// 			if reply.Accepted_seq > max_p { //-1 是未初始化
-// 				val = reply.Accepted_value
-// 				max_p = reply.Accepted_seq
-// 			}
-// 		}
-// 	}
-// 	major := len(data) / 2
-//
-// 	if count > major { //> major 并且max_p不为-1,也就是不为默认值
-// 		if max_p > -1 {
-//
-// 		} else {
-// 			val = v
-// 		}
-//
-// 		return px.sendAccept(seq, val)
-//
-// 	} else {
-// 		return false
-// 	}
-// }
-//
-// func (px *Paxos) sendAccept(seq int, val interface{}) bool {
-// 	fmt.Printf("sendAccept request %v %v \n",seq, val)
-// 	size := len(px.peers)
-// 	var acceptReplyArray = make([]AcceptReply,size)
-// 	for i, srv := range px.peers {
-// 		var reply AcceptReply
-// 		args := &AcceptArgs{seq, val}
-// 		if srv == px.peers[px.me] {
-// 			px.Accept(args, &reply)
-// 		} else {
-// 			ok := call(srv, "Paxos.Accept", args, &reply)
-// 			if !ok {
-// 				reply.Status = REJECT
-// 			}
-// 		}
-// 		acceptReplyArray[i] = reply
-// 	}
-//
-// 	count := 0
-// 	major := len(px.peers) / 2
-// 	for _, reply := range acceptReplyArray {
-// 		if reply.Status == OK {
-// 			count += 1
-// 		}
-// 	}
-//
-// 	if count > major {
-// 		//decided
-// 		px.status[seq] = Decided
-// 		px.agreed_value[seq] = val
-// 		return true
-// 	} else {
-// 		return false
-// 	}
-// }
-//
-// func (px *Paxos) Prepare(args *PrepareArgs, reply *PrepareReply) error{
-// 		px.mu.Lock()
-// 		defer px.mu.Unlock()
-// 		seq := args.Seq
-// 		if seq > px.max_prepared_id {
-// 				reply.Status = OK
-// 				reply.Accepted_seq = px.max_accepted_id
-// 				reply.Accepted_value = px.accepted_value
-// 		} else {
-// 				reply.Status = REJECT
-// 		}
-// 		fmt.Printf("receive prepare and return %v %v \n", reply.Status, reply.Accepted_seq)
-// 		return nil
-// }
-//
-// func (px *Paxos) Accept(args *AcceptArgs, reply *AcceptReply) error{
-// 		px.mu.Lock()
-// 		defer px.mu.Unlock()
-// 		seq := args.Seq
-// 		val := args.Value
-// 		if seq >= px.max_prepared_id {
-// 			px.max_prepared_id = seq
-// 			px.max_accepted_id = seq
-// 			px.accepted_value = val
-// 			reply.Status = OK
-// 			px.status[seq] = Decided
-// 			px.agreed_value[seq] = val
-// 		} else {
-// 			reply.Status = REJECT
-// 		}
-// 		fmt.Printf("receive accept and return %v %v \n", reply.Status, reply.Accepted_seq)
-// 		return nil
-// }
 
 //
 // the application on this machine is done with
@@ -525,6 +394,7 @@ func (px *Paxos) Min() int {
 		defer px.mu.Unlock()
 
 		minSeq := px.maxdone[px.me]
+		//px.maxdone是所有peer中的maxdone,如果所有值中的最小的那么就可以删除了，因为已经没有用了。
 		for i := range px.maxdone {
 			if minSeq > px.maxdone[i] {
 				minSeq = px.maxdone[i]
