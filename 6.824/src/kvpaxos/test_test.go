@@ -52,12 +52,14 @@ func TestBasic(t *testing.T) {
 	for i := 0; i < nservers; i++ {
 		kvh[i] = port("basic", i)
 	}
+	//初始化server,每个server都带有一个paxos服务器
 	for i := 0; i < nservers; i++ {
 		kva[i] = StartServer(kvh, i)
 	}
 
 	ck := MakeClerk(kvh)
 	var cka [nservers]*Clerk
+	//给每个clerk分配一个server,但是成员变量确实数组，那么如果这个失败了该如何办呢？
 	for i := 0; i < nservers; i++ {
 		cka[i] = MakeClerk([]string{kvh[i]})
 	}

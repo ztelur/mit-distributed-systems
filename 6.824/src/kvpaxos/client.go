@@ -66,6 +66,16 @@ func call(srv string, rpcname string,
 //
 func (ck *Clerk) Get(key string) string {
 	// You will have to modify this function.
+	//get at-most-once so init a rand
+	id := nrand()
+	i := 0
+	for {
+		//如果始终没有响应，应该依次循环的调用server的接口
+		args := &GetArgs{key}
+		var reply GetReply
+		ok := call(ck.servers[i], "KVPaxos.Get", args, &reply)
+		
+	}
 	return ""
 }
 

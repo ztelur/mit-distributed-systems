@@ -27,6 +27,10 @@ type Op struct {
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
+	Id int64
+	Key string
+	Value string
+	Op string
 }
 
 type KVPaxos struct {
@@ -38,17 +42,109 @@ type KVPaxos struct {
 	px         *paxos.Paxos
 
 	// Your definitions here.
+	database map[string]string
+	currentSeq int
+	clientRequest map[int64]bool
 }
 
 
 func (kv *KVPaxos) Get(args *GetArgs, reply *GetReply) error {
 	// Your code here.
+	//先判断是否接受过这个请求，at most once
+	kv.mu.Lock()
+	kv.mu.Unlock()
+
+	handled := kv.clientRequest[args.Id]
+	if handled {
+		reply.Value = kv.database[args.Key]
+		reply.Err = OK
+		return nil
+	}
+
+	op := Op{Id: args.Id, Key: args.Key, Op: "GET"}
+	kv.doPaxos(op)
+
+	v, ok = kv.database[args.Key]
+	if ok {
+		reply.Value = v
+		reply.Err = OK
+	} else {
+		reply.Err = ErrNoKey
+	}
 	return nil
+}
+
+func (kv *KVPaxos) doPaxos(op Op) {
+		var accept Op
+		for { //因为现在使用的是base paxos，每次没有让自己的提案没有被chosen，那么就继续
+			//这里需要判断currentSeq的状态吗？
+			// if kv.px.Status(currentSeq)
+			//这里还是基于base paxos的，每个paxos instance都会对同一个seq进行提议，可能会导致很多冲突
+			
+			status, v := kv.px.Status(currentSeq) //因为Get请求可能同时很多请求，currentSeq不能重复
+			if status == paxos.Decided {
+				accept = v.(op)
+			} else {
+				kv.px.Start(kv.currentSeq, op)
+				accept = kv.wait(kv.currentSeq)
+			}
+			//do operation
+			kv.handleDatabase(accept)
+			if v.Id == op.Id {
+				break
+			}
+
+		}
+}
+
+func (kv *KVPaxos) handleDatabase(op Op) {
+	kv.clientRequest[op.Id] = true
+	if op.Op == "Put" {
+		kv.database[op.Key] = op.Value
+	} else if op.Op == "Append" {
+		v, ok := kv.database[op.Key]
+		if ok {
+			kv.database[op.Key] = v + op.Value
+		} else {
+			kv.database[op.Key] = op.Value
+		}
+	}
+
+	kv.px.Done(kv.currentSeq)
+	kv.currentSeq += 1
+}
+
+
+func (kv *KVPaxos) wait(seq int) Op {
+	break := 10 * time.Millisecond
+	for {
+		status, v := kv.px.Status(seq)
+		if status == paxos.Decided {
+			return v.(op)
+		}
+		time.Sleep(break)
+		if break < 10 * time.Second {
+			break *= 2
+		}
+	}
 }
 
 func (kv *KVPaxos) PutAppend(args *PutAppendArgs, reply *PutAppendReply) error {
 	// Your code here.
+	// Your code here.
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
 
+	_, ok := kv.clientRequest[args.Id]
+	if ok {
+		reply.Err = OK
+		return nil
+	}
+
+	op := Op{Id: args.Id, Key: args.Key, Value: args.Value, Op: args.Op}
+	kv.doPaxos(op)
+
+	reply.Err = OK
 	return nil
 }
 
