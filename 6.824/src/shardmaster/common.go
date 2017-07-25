@@ -28,6 +28,7 @@ type Config struct {
 	Groups map[int64][]string // gid -> servers[]
 }
 
+//unique non-zero replica group identifier
 type JoinArgs struct {
 	GID     int64    // unique replica group ID
 	Servers []string // group server ports

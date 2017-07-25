@@ -80,7 +80,7 @@ func TestBasic(t *testing.T) {
 	runtime.GOMAXPROCS(4)
 
 	const nservers = 3
-	var sma []*ShardMaster = make([]*ShardMaster, nservers)
+	var sma []*ShardMaster = make([]*ShardMaster, nservers) //3个sharMaster,每个都通过paxos来进行一致化处理
 	var kvh []string = make([]string, nservers)
 	defer cleanup(sma)
 
@@ -91,7 +91,7 @@ func TestBasic(t *testing.T) {
 		sma[i] = StartServer(kvh, i)
 	}
 
-	ck := MakeClerk(kvh)
+	ck := MakeClerk(kvh) //
 	var cka [nservers]*Clerk
 	for i := 0; i < nservers; i++ {
 		cka[i] = MakeClerk([]string{kvh[i]})

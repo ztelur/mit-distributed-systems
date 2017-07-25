@@ -52,7 +52,7 @@ func (kv *KVPaxos) Get(args *GetArgs, reply *GetReply) error {
 	// Your code here.
 	//先判断是否接受过这个请求，at most once
 	kv.mu.Lock()
-	kv.mu.Unlock()
+	defer kv.mu.Unlock()
 
 	handled := kv.clientRequest[args.Id]
 	if handled {
@@ -80,7 +80,7 @@ func (kv *KVPaxos) doPaxos(op Op) {
 			//这里需要判断currentSeq的状态吗？
 			// if kv.px.Status(currentSeq)
 			//这里还是基于base paxos的，每个paxos instance都会对同一个seq进行提议，可能会导致很多冲突
-			
+
 			status, v := kv.px.Status(currentSeq) //因为Get请求可能同时很多请求，currentSeq不能重复
 			if status == paxos.Decided {
 				accept = v.(op)
